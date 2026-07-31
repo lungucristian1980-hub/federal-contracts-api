@@ -4,6 +4,7 @@ FEDERAL CONTRACTS & SPENDING — MOTORUL. Cauta premii federale (contracte/grant
 de o firma, agentiile de top. Sursa USAspending (POST cu filtre). Best-effort + cache scurt.
 """
 from __future__ import annotations
+import concurrent.futures as _cf
 import json, ssl, time, urllib.request
 from datetime import datetime, timezone
 import sources as SRC
@@ -91,13 +92,17 @@ def recipient_trend(name: str, years=10) -> list:
 
 
 def recipient_spending(name: str, years=10, limit=25) -> dict:
-    """Cat a primit o FIRMA din bani federali (contracte): top premii + trend pe an fiscal."""
-    r = search_awards(recipient=name, award_type="contracts", years=years, limit=limit)
+    """Cat a primit o FIRMA din bani federali (contracte): top premii + trend pe an fiscal.
+    Rulează căutarea premiilor + trend-ul în PARALEL (2 apeluri USAspending) — ~2x mai rapid."""
+    with _cf.ThreadPoolExecutor(max_workers=2) as ex:
+        f_awards = ex.submit(search_awards, recipient=name, award_type="contracts", years=years, limit=limit)
+        f_trend = ex.submit(recipient_trend, name, years)
+        r = f_awards.result()
+        by_year = f_trend.result()
     total = 0.0
     for a in r.get("results", []):
         try: total += float(a.get("Award Amount") or 0)
         except Exception: pass
-    by_year = recipient_trend(name, years)
     total_all_years = round(sum(y["amount_usd"] for y in by_year)) if by_year else None
     return {"recipient": name, "years": years,
             "total_all_awards_usd": total_all_years,
