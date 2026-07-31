@@ -21,9 +21,11 @@ app = FastAPI(
 @app.get("/")
 def root():
     return {"name": "Federal Contracts & Spending API", "version": "1.0.0",
-            "endpoints": ["/search", "/recipient", "/agencies", "/award", "/sources", "/health"],
+            "endpoints": ["/search", "/recipient", "/subawards", "/agencies", "/award", "/sources", "/health"],
             "unique": ["search federal contracts/grants by keyword/company/agency",
-                       "how much federal money a company received", "public-domain data, resale-safe"],
+                       "how much federal money a company received + per-year trend",
+                       "sub-award (subcontract) layer — who primes pass money down to",
+                       "public-domain data, resale-safe"],
             "data": "USAspending.gov (US Treasury) — public domain"}
 
 @app.get("/health")
@@ -48,6 +50,14 @@ def recipient(name: str = Query(..., description="company/recipient name, e.g. '
               limit: int = Query(25, ge=1, le=100)):
     """How much US federal money a company received (top awards + total), for contracts."""
     return ENG.recipient_spending(name, years=years, limit=limit)
+
+@app.get("/subawards")
+def subawards(keyword: str = Query("", description="search text, e.g. 'artificial intelligence'"),
+              recipient: str = Query("", description="subawardee/company name filter"),
+              years: int = Query(10, ge=1, le=20),
+              limit: int = Query(25, ge=1, le=100)):
+    """Sub-award (subcontract) search — who prime contractors pass federal money down to."""
+    return ENG.subaward_search(keyword=keyword or None, recipient=recipient or None, years=years, limit=limit)
 
 @app.get("/agencies")
 def agencies(limit: int = Query(25, ge=1, le=100)):

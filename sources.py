@@ -17,6 +17,8 @@ BASE = "https://api.usaspending.gov/api/v2"
 SEARCH_AWARD   = BASE + "/search/spending_by_award/"
 # cheltuieli grupate pe categorie (recipient/agency/...) — POST
 SPENDING_BY_CAT= BASE + "/search/spending_by_category/"
+# cheltuieli in timp (grupate pe an fiscal) — POST  (pt trend-ul per firma)
+SPENDING_OVER_TIME = BASE + "/search/spending_over_time/"
 # lista agentiilor de top + cheltuieli — GET
 TOPTIER        = BASE + "/references/toptier_agencies/"
 # detaliile unui premiu dupa ID — GET

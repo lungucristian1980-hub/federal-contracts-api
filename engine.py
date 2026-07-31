@@ -16,6 +16,8 @@ _CACHE: dict = {}
 FIELDS_CONTRACT = ["Award ID", "Recipient Name", "Award Amount", "Awarding Agency",
                    "Awarding Sub Agency", "Start Date", "End Date", "recipient_id"]
 FIELDS_GRANT    = ["Award ID", "Recipient Name", "Award Amount", "Awarding Agency", "Start Date", "End Date"]
+FIELDS_SUBAWARD = ["Sub-Award ID", "Sub-Awardee Name", "Sub-Award Amount", "Sub-Award Date",
+                   "Prime Recipient Name", "Awarding Agency", "Prime Award ID"]
 
 
 def _get(url, timeout=20):
@@ -71,19 +73,59 @@ def search_awards(keyword=None, recipient=None, agency=None, award_type="contrac
             "note": "US federal awards (USAspending, public domain). Amounts in USD."}
 
 
+def recipient_trend(name: str, years=10) -> list:
+    """Federal $ received by a company per fiscal year (accurate aggregate, not just top awards)."""
+    body = {"group": "fiscal_year",
+            "filters": {"award_type_codes": SRC.AWARD_TYPES["contracts"],
+                        "time_period": _time_period(years),
+                        "recipient_search_text": [name]}}
+    j = _post(SRC.SPENDING_OVER_TIME, body)
+    if not isinstance(j, dict) or j.get("_error"):
+        return []
+    out = []
+    for r in j.get("results", []) or []:
+        fy = (r.get("time_period") or {}).get("fiscal_year")
+        if fy is not None:
+            out.append({"fiscal_year": fy, "amount_usd": round(r.get("aggregated_amount") or 0)})
+    return out
+
+
 def recipient_spending(name: str, years=10, limit=25) -> dict:
-    """Cat a primit o FIRMA din bani federali (contracte) + top premii."""
+    """Cat a primit o FIRMA din bani federali (contracte): top premii + trend pe an fiscal."""
     r = search_awards(recipient=name, award_type="contracts", years=years, limit=limit)
     total = 0.0
     for a in r.get("results", []):
         try: total += float(a.get("Award Amount") or 0)
         except Exception: pass
+    by_year = recipient_trend(name, years)
+    total_all_years = round(sum(y["amount_usd"] for y in by_year)) if by_year else None
     return {"recipient": name, "years": years,
+            "total_all_awards_usd": total_all_years,
             "top_awards_total_usd": round(total),
+            "by_year": by_year,
             "award_count_shown": r.get("count", 0),
             "top_awards": r.get("results", []),
-            "note": "Suma este pe premiile AFISATE (top {}); pt totalul exact per firma se pot pagina toate.".format(limit),
+            "note": "total_all_awards_usd = agregat exact pe toti anii (spending_over_time); "
+                    "top_awards_total_usd = suma pe premiile AFISATE (top {}).".format(limit),
             "error": r.get("error")}
+
+
+def subaward_search(keyword=None, recipient=None, years=10, limit=25) -> dict:
+    """Subcontractele (sub-awards): cine primeste bani de la primcontractori. Layerul pe care
+    rivalii ieftini (prime-only) nu-l expun."""
+    filters = {"award_type_codes": SRC.AWARD_TYPES["contracts"], "time_period": _time_period(years)}
+    if keyword:   filters["keywords"] = [keyword]
+    if recipient: filters["recipient_search_text"] = [recipient]
+    body = {"filters": filters, "fields": FIELDS_SUBAWARD, "subawards": True,
+            "limit": min(max(limit, 1), 100), "sort": "Sub-Award Amount", "order": "desc"}
+    j = _post(SRC.SEARCH_AWARD, body)
+    if not isinstance(j, dict) or j.get("_error"):
+        return {"results": [], "count": 0, "error": (j or {}).get("_error", "no data"),
+                "note": "Subaward (subcontract) search via USAspending."}
+    res = j.get("results", []) or []
+    return {"query": {"keyword": keyword, "recipient": recipient, "years": years, "level": "subawards"},
+            "count": len(res), "results": res,
+            "note": "Subcontract (sub-award) layer — who primes pass federal money down to. USAspending, public domain."}
 
 
 def agencies(limit=25) -> dict:
