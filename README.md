@@ -57,3 +57,8 @@ pip install -r requirements.txt
 uvicorn api:app --reload
 # http://localhost:8000/docs
 ```
+
+
+---
+
+<sub>Built & maintained by **Quiet Machines** — the quiet machines that run your business. · by Cristian Lungu</sub>
